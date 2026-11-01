@@ -1,7 +1,7 @@
 const runtimeFrame=url=>{
   try{
     const u=new URL(url);
-    return /^(?:touhou\.vip|[^/]+\.touhou\.vip|127\.0\.0\.1|localhost)$/.test(u.hostname)&&
+    return /^(?:(?:[^/]+\.)?(?:touhouonline\.com|touhou\.vip)|127\.0\.0\.1|localhost)$/.test(u.hostname)&&
       u.searchParams.get('hosted')==='1'&&u.searchParams.get('runtimeVariant')==='multiplayer'&&
       /(?:^|\/)th06(?:-multiplayer)?(?:[/.\-]|$)/.test(u.pathname);
   }catch{return false;}
