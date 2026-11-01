@@ -13,6 +13,8 @@ if not exist "web\runtime\avoidance.wasm" (
   exit /b 1
 )
 echo AI demo: http://127.0.0.1:8144/
+echo TH06 co-op: http://127.0.0.1:8144/th06.html
+echo TH07 co-op: http://127.0.0.1:8144/th07.html
 echo Keep this window open while using the demo.
 echo Open the address above in your browser.
 node scripts/serve.mjs 8144
