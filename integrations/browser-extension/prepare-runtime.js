@@ -2,13 +2,11 @@ globalThis.__eaglerAiPrepare=async()=>{
   try{
     // Read the original package table; never evaluate the stock runtime JS.
     // This preserves the site's installed original/beautified DATA layout.
-    const documentResponse=await fetch(location.href);
-    if(!documentResponse.ok)throw Error('无法读取原运行页');
-    const original=new DOMParser().parseFromString(await documentResponse.text(),'text/html');
-    const template=original.getElementById('eagler-runtime-script-template');
-    const script=template?.content.querySelector('script')??original.querySelector('script[src]');
-    const src=script?.getAttribute('src');
+    const loader=globalThis.__eaglerAiLoader;
+    const src=loader?.originalSrc;
     if(!src)throw Error('未找到主站原运行包脚本');
+    if(!globalThis.Module?.canvas?.isConnected)throw Error('主站画布未准备好');
+    loader.phase='读取原运行包资源表';
     const response=await fetch(new URL(src,location.href));
     if(!response.ok)throw Error('无法读取原运行包资源表');
     const code=await response.text();
@@ -22,7 +20,11 @@ globalThis.__eaglerAiPrepare=async()=>{
     if(remainder||!files.length)throw Error('原运行包的文件布局无法识别');
     const managed=globalThis.__eaglerManagedDataState;
     let buffer;
-    if(managed?.enabled){
+    loader.phase='准备主站游戏资源';
+    if(typeof Module.getPreloadedPackage==='function'){
+      buffer=Module.getPreloadedPackage('th06.data',Number(metadata[2]));
+      if(!buffer||!Number.isSafeInteger(buffer.byteLength))throw Error('主站预加载资源无效');
+    }else if(managed?.enabled){
       const prepare=window.parent.__eaglerPrepareManagedRuntimeDataV1;
       if(typeof prepare!=='function')throw Error('主站未提供已安装资源接口');
       const payload=await prepare({game:managed.game,generation:managed.generation,epoch:globalThis.__eaglerRuntimeEpochV1});

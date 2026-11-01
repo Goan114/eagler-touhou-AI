@@ -29,7 +29,7 @@ npm run build:th06-online -- --source=build/netplay-upstream --emsdk=/path/to/em
 
 ## 客户端输入路径
 
-- 扩展在目标 iframe 的 `document_start` 停止原加载器，在同一 URL、同一来源中启动本地运行包，保留主站的 epoch、资源、房间、存档与消息接口。
+- 扩展在目标 iframe 的 `document_start` 注册内核加载钩子；主站建好画布、Module、消息接口和资源缓存后，在模板替换游戏脚本的位置加载本地内核。保留原页面、URL、主站初始化代码、epoch、房间与存档接口。
 - 资源从主站已有的 DATA 中读取，按原运行包资源表校验后挂载；不执行原脚本，不向扩展后台传送游戏数据，不解包到存档目录。
 - `Th06Ai::captureNetplay` 在 `CaptureLocalInput` 中生成本机所属座位的按键。输入仍进入 `ScheduleLocalInput` 和原网络发送流程。
 - 以会话代次及采集帧缓存实际输入。同一帧不会因重新采样、重发或参数变化被改写；重演／录像播放不运行 AI，也不推进 AI 的延迟队列和动作锁定。

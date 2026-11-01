@@ -18,19 +18,26 @@ const wasmBase64=()=>wasmPromise??=(async()=>{
 
 async function boot(sender){
   if(!sender.tab||!sender.frameId||!runtimeFrame(sender.url))throw Error('不支持的游戏页面');
-  const target={tabId:sender.tab.id,frameIds:[sender.frameId]};
-  const html=await (await fetch(chrome.runtime.getURL('runtime/frame.html'))).text();
+  const target=sender.documentId?{tabId:sender.tab.id,documentIds:[sender.documentId]}:
+    {tabId:sender.tab.id,frameIds:[sender.frameId]};
+  await chrome.scripting.executeScript({target,world:'MAIN',func:()=>{
+    if(!globalThis.__eaglerAiLoader?.intercepted||!globalThis.Module?.canvas?.isConnected)
+      throw Error('主站运行页尚未准备好画布');
+    globalThis.__eaglerAiLoader.phase='准备 AI 内核';
+  }});
   const encoded=await wasmBase64();
-  await chrome.scripting.executeScript({target,world:'MAIN',func:markup=>{
-    document.open();document.write(markup);document.close();
-  },args:[html]});
-  await chrome.scripting.executeScript({target,world:'MAIN',files:['runtime/bootstrap.js']});
   await chrome.scripting.executeScript({target,world:'MAIN',files:['prepare-runtime.js']});
   const prepared=await chrome.scripting.executeScript({target,world:'MAIN',func:()=>globalThis.__eaglerAiPrepare()});
   const result=prepared[0]?.result;
   if(!result?.ok)throw Error(result?.error||'无法读取主站已有游戏资源');
   await chrome.scripting.executeScript({target,world:'MAIN',func:base64=>{
+    globalThis.__eaglerAiLoader.phase='启动 AI 内核';
     Module.wasmBinary=Uint8Array.from(atob(base64),character=>character.charCodeAt(0));
+    const initialized=Module.onRuntimeInitialized;
+    Module.onRuntimeInitialized=()=>{
+      globalThis.__eaglerAiLoader.phase='内核已启动';
+      initialized?.();
+    };
     Module.onAbort=reason=>{
       globalThis.__eaglerAiStartupError=String(reason);
       document.getElementById('status').textContent=`AI 运行包错误：${reason}`;
@@ -48,7 +55,8 @@ async function control(message){
   const replies=await chrome.scripting.executeScript({target:{tabId:tab.id,allFrames:true},world:'MAIN',
     func:request=>{
       if(globalThis.__eaglerAiStartupError)return {ok:false,error:globalThis.__eaglerAiStartupError};
-      if(!globalThis.__eaglerAiControls)return null;
+      if(!globalThis.__eaglerAiControls)return globalThis.__eaglerAiLoader?
+        {ok:false,error:`AI 加载中：${globalThis.__eaglerAiLoader.phase}`} : null;
       return globalThis.__eaglerAiControls(request);
     },args:[message]});
   const reply=replies.find(entry=>entry.result)?.result;
@@ -56,9 +64,29 @@ async function control(message){
   return reply;
 }
 
+async function reportBootFailure(sender,error){
+  if(!sender.tab||!sender.frameId)return;
+  const target=sender.documentId?{tabId:sender.tab.id,documentIds:[sender.documentId]}:
+    {tabId:sender.tab.id,frameIds:[sender.frameId]};
+  try{
+    await chrome.scripting.executeScript({target,world:'MAIN',func:message=>{
+      const phase=globalThis.__eaglerAiLoader?.phase;
+      const detail=phase?`${phase}：${message}`:message;
+      globalThis.__eaglerAiStartupError=detail;
+      const status=document.getElementById('status');
+      if(status)status.textContent=`AI 加载失败：${detail}`;
+      console.error('[Eagler AI]',detail);
+    },args:[error]});
+  }catch{/* The host may already have retired this runtime document. */}
+}
+
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   if(message?.type!=='boot'&&message?.type!=='control')return;
   if(message.type==='control'&&sender.url!==chrome.runtime.getURL('popup.html'))return;
-  (message.type==='boot'?boot(sender):control(message)).then(respond,error=>respond({ok:false,error:String(error.message||error)}));
+  (message.type==='boot'?boot(sender):control(message)).then(respond,async error=>{
+    const detail=String(error.message||error);
+    if(message.type==='boot')await reportBootFailure(sender,detail);
+    respond({ok:false,error:detail});
+  });
   return true;
 });

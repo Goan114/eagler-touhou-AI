@@ -1,5 +1,5 @@
 import {spawn} from 'node:child_process';
-import {access,mkdir,cp,copyFile,readFile,writeFile} from 'node:fs/promises';
+import {access,mkdir,cp,copyFile,readFile,writeFile,rm} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -60,15 +60,9 @@ await run(cmake,['--build',binary,'--target','th06','--parallel',arg('jobs')??'6
 await cp(path.join(root,'integrations/browser-extension'),extension,{recursive:true});
 await mkdir(path.join(extension,'runtime'),{recursive:true});
 for(const file of ['th06.js','th06.wasm'])await copyFile(path.join(binary,file),path.join(extension,'runtime',file));
-// The shell keeps the host's real epoch, resources, room and storage protocol.
-// Execute its bootstrap as an extension MAIN-world file, without inline eval.
-const shell=await readFile(path.join(stage,'resources/shell.html'),'utf8');
-const scripts=[...shell.matchAll(/<script>([\s\S]*?)<\/script>/g)];
-if(scripts.length!==2||!shell.includes('eagler-runtime-script-template'))throw Error('Runtime shell layout changed');
-await writeFile(path.join(extension,'runtime/bootstrap.js'),scripts[0][1]);
-await writeFile(path.join(extension,'runtime/frame.html'),shell
-  .replace(/<script>[\s\S]*?<\/script>/g,'')
-  .replace(/<template id="eagler-runtime-script-template">[\s\S]*?<\/template>/,''));
+// The extension reuses the deployed page's canvas, bootstrap, RPC and DATA.
+// Only the paired JS/Wasm core is replaced at the original loader handoff.
+for(const obsolete of ['bootstrap.js','frame.html'])await rm(path.join(extension,'runtime',obsolete),{force:true});
 const info={game:'th06',source,netplay:true,localSeatOnly:true,thcrap:!!unicode,originalGameDataIncluded:false,gameExecuted:false};
 await writeFile(path.join(build,'source.json'),JSON.stringify(info,null,2));
 console.log(`Load unpacked extension: ${extension}`);
