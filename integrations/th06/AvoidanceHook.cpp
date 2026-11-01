@@ -89,6 +89,7 @@ bool rescueWanted(){
 }
 bool teamWeightsLocked(){return rescueWanted()||(teamMode==0&&!humanUnavailable());}
 bool attackWeightLocked(){return rescueWanted()||(!preserveFollowAttack&&teamMode==0&&!humanUnavailable());}
+bool edgeWeightLocked(){return teamWeightsLocked()||(teamMode==1&&!g_Gui.BossPresent());}
 struct FollowHistory {
     std::array<Vec2,19> positions{}; // Current sample plus 18 logical ticks (0.3 s).
     std::size_t next=0,count=0;
@@ -104,7 +105,7 @@ struct FollowHistory {
 } followHistory;
 void applyTeamWeights(){
     const bool locked=teamWeightsLocked();auto s=planner.settings();
-    const float attack=attackWeightLocked()?0:splitAttackWeight,edge=locked?0:splitEdgeWeight,movement=locked?0:splitMovementWeight;
+    const float attack=attackWeightLocked()?0:splitAttackWeight,edge=edgeWeightLocked()?0:splitEdgeWeight,movement=locked?0:splitMovementWeight;
     if(s.attackWeight==attack&&s.edgeWeight==edge&&s.movementWeight==movement)return;
     s.attackWeight=attack;s.edgeWeight=edge;s.movementWeight=movement;planner.configure(s);
     lastFrame=std::numeric_limits<u32>::max();
@@ -485,7 +486,7 @@ AI_EXPORT void th06_ai_danger(float weight){
 }
 AI_EXPORT void th06_ai_edges(float weight,float distance){
     splitEdgeWeight=weight;
-    auto s=planner.settings();s.edgeWeight=teamWeightsLocked()?0:weight;s.edgeDistance=distance;planner.configure(s);
+    auto s=planner.settings();s.edgeWeight=edgeWeightLocked()?0:weight;s.edgeDistance=distance;planner.configure(s);
     lastFrame=std::numeric_limits<u32>::max();
 }
 AI_EXPORT void th06_ai_density(float weight){
@@ -503,6 +504,7 @@ AI_EXPORT double th06_ai_metric(int field){
     case 22:return teamWeightsLocked();case 23:return rescueWanted();
     case 24:return deliveredInput;
     case 26:return actionRemaining;case 27:return planner.settings().horizon;
+    case 28:return edgeWeightLocked();
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
     case 10:return MultiplayerGameplay::GetPlayerCount();case 11:return GetMultiplayerBossDamageMultiplier();
     case 12:return GetPlayerLives(0);case 13:return GetPlayerLives(1);

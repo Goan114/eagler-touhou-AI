@@ -10,12 +10,12 @@ details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}su
 <label>AI 实力 <select id="strength"><option value="strong">强强（L混关实力）</option><option value="stronger">这么强？！（LNB实力）</option><option value="capable">有点强（H混关实力）</option><option value="clumsy">不太聪明的ai</option><option value="weak">弱弱？！</option><option value="custom" disabled hidden>自定义（高级选项）</option></select></label>
 <p id="customStrength" class="hint" hidden>实力已由高级参数自定义；重新选择档位可恢复预设。</p>
 <label>配合方式 <select id="teamMode"><option value="0">跟随队友</option><option value="1">分别压制</option></select></label>
-<p class="hint">跟随队友：尽量跟着你行动。分别压制：道中与你分居左右，Boss 战自由避弹与输出。</p>
+<p class="hint">跟随队友：尽量跟着你行动。分别压制：道中与你分居左右，无 Boss 时关闭边缘惩罚，Boss 出现后恢复所设权重，自由避弹与输出。</p>
 <p class="hint">你用尽残机进入待救状态后，AI 有残机会优先靠近并赠送一残；无法援助时，暂时恢复输出站位和边缘惩罚权重。你正常重生或获救后恢复所选配合方式。</p>
 <pre id="status" role="status">加载游戏…</pre>
 <details id="advanced"><summary>高级选项</summary>
 <p class="hint">强强：6 帧预判、2 条路线、动作 1 帧；这么强？！：12 帧预判、8 条路线、动作 1 帧；两档输入延迟为 0。有点强：6 帧预判、2 条路线、动作 3 帧、输入延迟 1 帧。不太聪明的ai：6 帧预判、2 条路线、动作 6 帧、输入延迟 1 帧、切换动作惩罚 0.100。弱弱？！：6 帧预判、2 条路线、动作 12 帧、输入延迟 2 帧、切换动作惩罚 2.000。其他参数不随档位改变。</p>
-<p class="hint">跟随延迟为 0.3 秒，输出站位、边缘惩罚与移动惩罚锁定为 0；弱弱？！跟随时例外保留输出站位权重 2。无法跟随或切回分别压制时恢复权重。</p>
+<p class="hint">跟随延迟为 0.3 秒，输出站位、边缘惩罚与移动惩罚锁定为 0；弱弱？！跟随时例外保留输出站位权重 2。分别压制无 Boss 时边缘惩罚也为 0，Boss 出现后恢复所设权重。</p>
 <p class="hint">弱弱？！另设收点权重 6、输出站位权重 2，边缘、危险距离和弹幕密度惩罚均为 0。救援期间仍暂停输出站位评分。</p>
 <label>预判帧数 <span id="hv">6</span><input id="horizon" type="range" min="6" max="24" step="3" value="6"></label>
 <label>保留路线 <span id="bv">2</span><input id="beam" type="range" min="2" max="16" step="2" value="2"></label>
@@ -63,9 +63,10 @@ const splitWeights={attack:$('attack').value,edgeWeight:$('edgeWeight').value};
 function syncTeamControls(){
   const following=core?!!core._th06_ai_metric(22):$('teamMode').value==='0';
   const rescuing=core?!!core._th06_ai_metric(23):false;
+  const edgeLocked=core?!!core._th06_ai_metric(28):true;
   for(const id of ['attack','edgeWeight']){
     const slider=$(id);
-    const locked=following&&(id!=='attack'||$('strength').value!=='weak'||rescuing);
+    const locked=id==='edgeWeight'?edgeLocked:following&&($('strength').value!=='weak'||rescuing);
     if(locked){if(!slider.disabled)splitWeights[id]=slider.value;slider.value='0';}
     else if(slider.disabled)slider.value=splitWeights[id];
     slider.disabled=locked;
