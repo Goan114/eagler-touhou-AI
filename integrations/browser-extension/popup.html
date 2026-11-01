@@ -1,0 +1,27 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8">
+<title>AI 接管我的机体</title><link rel="stylesheet" href="popup.css">
+<main><h1>AI 接管我的机体</h1>
+<p>红魔乡联机 · 只控制你自己的座位</p>
+<label><input id="enabled" type="checkbox">开启接管（游戏内也可按 F8）</label>
+<label>实力<select id="strength">
+<option value="strong">强强（L混关实力）</option><option value="stronger">这么强？！（LNB实力）</option>
+<option value="capable">有点强（H混关实力）</option><option value="clumsy">不太聪明的ai</option>
+<option value="weak">弱弱？！</option><option value="custom" disabled>自定义</option></select></label>
+<label>配合<select id="team"><option value="0">跟随队友</option><option value="1">分别压制</option></select></label>
+<details><summary>高级选项</summary>
+<label>预判帧数 <output for="horizon"></output><input id="horizon" type="range" min="6" max="24" step="3"></label>
+<label>保留路线 <output for="beam"></output><input id="beam" type="range" min="2" max="16" step="2"></label>
+<label>动作持续帧数 <output for="duration"></output><input id="duration" type="range" min="1" max="12" step="1"></label>
+<label>输入延迟帧数 <output for="delay"></output><input id="delay" type="range" min="0" max="30" step="1"></label>
+<label>切换动作惩罚 <output for="switchWeight"></output><input id="switchWeight" type="range" min="0" max="2" step="0.005"></label>
+<label>收点权重 <output for="pickup"></output><input id="pickup" type="range" min="0" max="6" step="0.25"></label>
+<label>输出站位权重 <output for="attack"></output><input id="attack" type="range" min="0" max="2" step="0.05"></label>
+<label>边缘惩罚 <output for="edge"></output><input id="edge" type="range" min="0" max="5" step="0.01"></label>
+<label>边缘区域 <output for="edgeDistance"></output><input id="edgeDistance" type="range" min="1" max="160" step="1"></label>
+<label>危险距离惩罚 <output for="danger"></output><input id="danger" type="range" min="0" max="100" step="0.5"></label>
+<label>弹幕密度惩罚 <output for="density"></output><input id="density" type="range" min="0" max="2" step="0.01"></label>
+<p>跟随／分别压制的权重规则沿用试玩版；滑条显示保存的设置值。</p>
+</details>
+<pre id="status">正在连接游戏…</pre>
+<p>先启用扩展，再从主站重新启动红魔乡多人模式。AI 初始关闭；菜单、暂停与对话仍由你操作。</p>
+</main><script src="popup.js"></script></html>

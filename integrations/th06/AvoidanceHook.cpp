@@ -27,11 +27,19 @@
 #else
 #define AI_EXPORT
 #endif
-#if defined(TH_ENABLE_NETPLAY)
+#if defined(TH_ENABLE_NETPLAY) && !defined(EAGLER_AI_NETPLAY)
 #error Local AI seats must not be attached to a network session.
 #endif
 namespace {
 using namespace eagler::ai;
+#ifdef EAGLER_AI_NETPLAY
+int controlledSlot=0,teammateSlot=1;
+u32 captureFrame=0,captureGeneration=std::numeric_limits<u32>::max();
+u32 decisionFrame(){return captureFrame;}
+#else
+constexpr int controlledSlot=1,teammateSlot=0;
+u32 decisionFrame(){return g_GameManager.gameFrames;}
+#endif
 Planner planner;
 InputDelay inputDelay;
 int requestedHorizon=12,actionRemaining=0;
@@ -40,7 +48,7 @@ bool actionTickValid=false;
 u32 actionTickFrame=0,actionTickStage=0;
 void resetAction(){actionRemaining=0;heldAction=Focus;actionTickValid=false;}
 std::uint32_t takeAction(std::uint32_t wanted){
-    const u32 frame=g_GameManager.gameFrames,stage=u32(g_GameManager.currentStage);
+    const u32 frame=decisionFrame(),stage=u32(g_GameManager.currentStage);
     if(actionTickValid&&frame==actionTickFrame&&stage==actionTickStage)return heldAction;
     if(!actionRemaining){heldAction=wanted&(Focus|Left|Right|Up|Down);actionRemaining=planner.settings().actionFrames;}
     --actionRemaining;actionTickValid=true;actionTickFrame=frame;actionTickStage=stage;
@@ -57,7 +65,12 @@ std::array<Hazard,Planner::MaxHazards> hazards;
 std::array<Pickup,Planner::MaxPickups> pickups;
 std::array<AttackTarget,Planner::MaxTargets> targets;
 std::size_t count=0;
-bool enabled=true,wasActive=false,overflow=false,f8=false;
+#ifdef EAGLER_AI_NETPLAY
+bool enabled=false;
+#else
+bool enabled=true;
+#endif
+bool wasActive=false,overflow=false,f8=false;
 u32 lastFrame=std::numeric_limits<u32>::max(),lastStage=0;
 std::uint16_t cached=0;
 Result result;
@@ -71,7 +84,8 @@ float splitAttackWeight=.2f,splitEdgeWeight=1.f;
 const float splitMovementWeight=planner.settings().movementWeight;
 bool humanUnavailable(){
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
-    const auto& human=g_Players[0];
+    const auto& human=g_Players[teammateSlot];
+    if(!MultiplayerGameplay::IsPlayerActive(teammateSlot))return true;
     return human.chainCalc&&human.playerState!=PLAYER_STATE_ALIVE&&human.playerState!=PLAYER_STATE_INVULNERABLE;
 #else
     return false;
@@ -79,9 +93,9 @@ bool humanUnavailable(){
 }
 bool rescueWanted(){
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
-    const auto& ai=g_Players[1];
-    return MultiplayerGameplay::IsMultiplayer()&&MultiplayerGameplay::IsPlayerActive(0)&&
-        g_Players[0].chainCalc&&g_Players[0].playerState==PLAYER_STATE_REVIVABLE&&GetPlayerLives(1)>0&&
+    const auto& ai=g_Players[controlledSlot];
+    return MultiplayerGameplay::IsMultiplayer()&&MultiplayerGameplay::IsPlayerActive(teammateSlot)&&
+        g_Players[teammateSlot].chainCalc&&g_Players[teammateSlot].playerState==PLAYER_STATE_REVIVABLE&&GetPlayerLives(controlledSlot)>0&&
         ai.chainCalc&&(ai.playerState==PLAYER_STATE_ALIVE||ai.playerState==PLAYER_STATE_INVULNERABLE);
 #else
     return false;
@@ -112,8 +126,8 @@ void applyTeamWeights(){
 }
 void sampleTeammate(){
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
-    const auto& human=g_Players[0];
-    if(!MultiplayerGameplay::IsPlayerActive(0)||!human.chainCalc||
+    const auto& human=g_Players[teammateSlot];
+    if(!MultiplayerGameplay::IsPlayerActive(teammateSlot)||!human.chainCalc||
        (human.playerState!=PLAYER_STATE_ALIVE&&human.playerState!=PLAYER_STATE_INVULNERABLE)){
         followHistory.reset();return;
     }
@@ -124,12 +138,12 @@ void sampleTeammate(){
     if(PracticeRuntime::CapturesGameInput())return;
 #endif
     followHistory.sample({human.positionCenter.x,human.positionCenter.y},
-                         g_GameManager.gameFrames,u32(g_GameManager.currentStage));
+                         decisionFrame(),u32(g_GameManager.currentStage));
 #endif
 }
 ::Player& controlledPlayer(){
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
-    return g_Players[1];
+    return g_Players[controlledSlot];
 #else
     return g_Player;
 #endif
@@ -139,9 +153,9 @@ bool canBomb(){
     bool eligible=autoBomb&&player.playerState==PLAYER_STATE_ALIVE&&!player.bombInfo.isInUse&&
                   player.bombInfo.calc&&player.respawnTimer!=0;
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
-    eligible=eligible&&GetPlayerBombs(1)>0&&player.teamBombProtectionTimer.AsFrames()<=0&&!humanBombRequested;
+    eligible=eligible&&GetPlayerBombs(controlledSlot)>0&&player.teamBombProtectionTimer.AsFrames()<=0&&!humanBombRequested;
     for(int i=0;i<MultiplayerGameplay::GetPlayerCount();++i)
-        if(i!=1&&MultiplayerGameplay::IsPlayerActive(i)&&g_Players[i].bombInfo.isInUse)eligible=false;
+        if(i!=controlledSlot&&MultiplayerGameplay::IsPlayerActive(i)&&g_Players[i].bombInfo.isInUse)eligible=false;
 #else
     eligible=eligible&&g_GameManager.bombsRemaining>0;
 #endif
@@ -149,7 +163,7 @@ bool canBomb(){
 }
 bool updateBomb(){
     if(!canBomb()){resetBomb();return false;}
-    const u32 frame=g_GameManager.gameFrames,stage=u32(g_GameManager.currentStage);
+    const u32 frame=decisionFrame(),stage=u32(g_GameManager.currentStage);
     if(bombTickValid){
         if(stage!=bombTickStage||frame<bombTickFrame)resetBomb();
         else if(frame==bombTickFrame)return bombPulse;
@@ -162,7 +176,7 @@ bool updateBomb(){
     return bombPulse;
 }
 std::uint16_t deliverInput(std::uint16_t wanted){
-    const u32 frame=g_GameManager.gameFrames,stage=u32(g_GameManager.currentStage);
+    const u32 frame=decisionFrame(),stage=u32(g_GameManager.currentStage);
     if(inputTickValid&&(stage!=inputTickStage||frame<inputTickFrame))resetInput();
     const bool bombAllowed=canBomb();
     if(!bombAllowed){inputDelay.cancelButtons(TH_BUTTON_BOMB);wanted&=~TH_BUTTON_BOMB;}
@@ -177,7 +191,7 @@ std::uint16_t deliverInput(std::uint16_t wanted){
 void add(const Hazard& h){if(count<hazards.size())hazards[count++]=h;else overflow=true;}
 void formation(World& w){
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
-    const auto& human=g_Players[0];
+    const auto& human=g_Players[teammateSlot];
     if(rescueWanted()){
         // Approach the drifting ghost using normal movement and collision search.
         w.formationGoal={std::clamp(human.positionCenter.x,w.bounds.left,w.bounds.right),
@@ -188,7 +202,7 @@ void formation(World& w){
             w.requiredFirstFocus=(heldAction&Focus)?0:1;
         return;
     }
-    if(!MultiplayerGameplay::IsMultiplayer()||!MultiplayerGameplay::IsPlayerActive(0)||!human.chainCalc||
+    if(!MultiplayerGameplay::IsMultiplayer()||!MultiplayerGameplay::IsPlayerActive(teammateSlot)||!human.chainCalc||
        (human.playerState!=PLAYER_STATE_ALIVE&&human.playerState!=PLAYER_STATE_INVULNERABLE))return;
     if(teamMode==0){
         if(!followHistory.count)return;
@@ -276,21 +290,21 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     active=active&&!PracticeRuntime::CapturesGameInput();
 #endif
     if(!active){if(wasActive)planner.reset();resetInput();resetAction();wasRescuing=false;wasActive=false;lastFrame=std::numeric_limits<u32>::max();return input;}
-    if(actionTickValid&&(actionTickStage!=u32(g_GameManager.currentStage)||g_GameManager.gameFrames<actionTickFrame))resetAction();
+    if(actionTickValid&&(actionTickStage!=u32(g_GameManager.currentStage)||decisionFrame()<actionTickFrame))resetAction();
     const bool rescuing=rescueWanted();
     if(rescuing!=wasRescuing){resetInput();wasRescuing=rescuing;} // Do not donate again from stale rescue taps.
     applyTeamWeights();
-    if(!wasActive||g_GameManager.currentStage!=int(lastStage)||g_GameManager.gameFrames<lastFrame)planner.reset();
+    if(!wasActive||g_GameManager.currentStage!=int(lastStage)||decisionFrame()<lastFrame)planner.reset();
     wasActive=true;
     constexpr std::uint16_t owned=TH_BUTTON_DIRECTION|TH_BUTTON_FOCUS|TH_BUTTON_SHOOT|TH_BUTTON_BOMB;
     const auto apply=[&](std::uint16_t ai){return std::uint16_t((input&~owned)|ai);};
-    if(lastFrame==g_GameManager.gameFrames&&lastStage==u32(g_GameManager.currentStage))return apply(deliverInput(cached));
-    lastFrame=g_GameManager.gameFrames;lastStage=u32(g_GameManager.currentStage);
+    if(lastFrame==decisionFrame()&&lastStage==u32(g_GameManager.currentStage))return apply(deliverInput(cached));
+    lastFrame=decisionFrame();lastStage=u32(g_GameManager.currentStage);
     const auto begin=SDL_GetPerformanceCounter();count=0;overflow=false;
     const float scale=g_Supervisor.effectiveFramerateMultiplier;
     World w;const auto& p=controlled;const auto& gm=g_GameManager;
     w.commitFirstAction=true;w.committedAction=heldAction;
-    w.committedFrames=actionRemaining+(actionTickValid&&actionTickFrame==gm.gameFrames?1:0);
+    w.committedFrames=actionRemaining+(actionTickValid&&actionTickFrame==decisionFrame()?1:0);
     w.player.position={p.positionCenter.x,p.positionCenter.y};
     // TH06 uses an axis-aligned player square; its circumscribed circle is a
     // conservative fit for the shared planner's circular player geometry.
@@ -374,7 +388,7 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     return apply(deliverInput(cached));
 }
 void Th06Ai::configureSession(){
-#ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
+#if defined(TH_ENABLE_MULTIPLAYER_GAMEPLAY) && !defined(EAGLER_AI_NETPLAY)
     if(g_GameManager.isInReplay||g_GameManager.demoMode)return;
     MultiplayerGameplay::SessionState session;
     session.playerCount=2;session.localPlayer=0;session.showStagePlayerNames=true;
@@ -390,7 +404,7 @@ void Th06Ai::configureSession(){
 #endif
 }
 void Th06Ai::resetPracticeResources(){
-#ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
+#if defined(TH_ENABLE_MULTIPLAYER_GAMEPLAY) && !defined(EAGLER_AI_NETPLAY)
     if(g_GameManager.isInReplay||g_GameManager.demoMode||!MultiplayerGameplay::IsMultiplayer())return;
     bool practice=g_GameManager.isInPracticeMode!=0;
 #ifdef TH_ENABLE_THPRAC
@@ -419,7 +433,7 @@ void Th06Ai::resetPracticeResources(){
 #endif
 }
 void Th06Ai::commitLocal(std::uint16_t humanInput){
-#ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
+#if defined(TH_ENABLE_MULTIPLAYER_GAMEPLAY) && !defined(EAGLER_AI_NETPLAY)
     if(g_GameManager.isInReplay||g_GameManager.demoMode){
         if(ownsInputs){Netplay::Input::ClearPlayerButtonOverrides();ownsInputs=false;}
         followHistory.reset();resetBomb();resetInput();resetAction();active=0;return;
@@ -507,9 +521,10 @@ AI_EXPORT double th06_ai_metric(int field){
     case 28:return edgeWeightLocked();
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
     case 10:return MultiplayerGameplay::GetPlayerCount();case 11:return GetMultiplayerBossDamageMultiplier();
-    case 12:return GetPlayerLives(0);case 13:return GetPlayerLives(1);
-    case 14:return GetPlayerPower(0);case 15:return GetPlayerPower(1);
-    case 16:return g_Players[1].playerState;case 17:return GetPlayerBombs(0);case 18:return GetPlayerBombs(1);
+    case 12:return GetPlayerLives(teammateSlot);case 13:return GetPlayerLives(controlledSlot);
+    case 14:return GetPlayerPower(teammateSlot);case 15:return GetPlayerPower(controlledSlot);
+    case 16:return g_Players[controlledSlot].playerState;case 17:return GetPlayerBombs(teammateSlot);case 18:return GetPlayerBombs(controlledSlot);
+    case 29:return controlledSlot;
 #endif
     default:return 0;}
 }

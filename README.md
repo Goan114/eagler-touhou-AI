@@ -4,6 +4,8 @@
 
 对应 [eagler-touhou #144](https://github.com/Ritosa2333/eagler-touhou/issues/144)。提供基础避弹、独立座位输入接口、浏览器演示，以及[红魔乡本地合作接入](integrations/th06/README.md)：P1 真人 + P2 AI，使用作品已有的多人战斗与资源规则。
 
+[主站本地扩展](integrations/browser-extension/README.md)可在自己的浏览器中为红魔乡多人运行页加载 AI，接管当前客户端的联机座位。其他玩家照常使用主站，扩展不增加房间人数，不修改站点部署。
+
 ## 默认策略
 
 - 只看未来 **12 帧**，每 3 帧展开一次，保留 **8 条路线**。
@@ -36,7 +38,7 @@ cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release
 cmake --build build/native --config Release
 ```
 
-完整字段、接入顺序与状态位见[接入文档](docs/INTEGRATION.md)。红魔乡实验使用独立复制构建，没有改动 Eagler 主仓库，也没有接入联网模式。
+完整字段、接入顺序与状态位见[接入文档](docs/INTEGRATION.md)。红魔乡本地合作与联机接管使用独立构建目录；联网接管在原输入采集位置生成按键，预测与回滚继续消费已经记录的输入。
 
 ## 来源
 
