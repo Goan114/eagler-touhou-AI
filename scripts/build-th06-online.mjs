@@ -39,11 +39,21 @@ driverCode='#include "../NetplayHook.hpp"\n'+driverCode.replace(seam,
   seam+'\n    Th06Ai::captureNetplay(input,g_LocalPlayer,frame,g_SessionGeneration);');
 await writeFile(driver,driverCode);
 const cmakeFile=path.join(stage,'CMakeLists.txt');
+// Emscripten 6 no longer includes wasmBinary in the default incoming API.
+// Keep the host's normal Module hooks and accept our paired AI binary; falling
+// back to locateFile would load the stock site's incompatible Wasm instead.
+const incomingModuleApi=[
+  'ENVIRONMENT','arguments','canvas','dynamicLibraries','elementPointerLock',
+  'instantiateWasm','locateFile','monitorRunDependencies','noExitRuntime','noInitialRun',
+  'onAbort','onExit','onRuntimeInitialized','postRun','preInit','preRun','print','printErr',
+  'setStatus','statusMessage','stderr','stdin','stdout','thisProgram','wasm','websocket','wasmBinary',
+];
 await writeFile(cmakeFile,(await readFile(cmakeFile,'utf8'))+`
 # Client-only AI input producer; native gameplay and wire ABI are unchanged.
 add_subdirectory("${root.replaceAll('\\','/')}" ai-core)
 target_sources(th06 PRIVATE src/NetplayHook.cpp)
 target_link_libraries(th06 PRIVATE eagler::ai)
+target_link_options(th06 PRIVATE "-sINCOMING_MODULE_JS_API=[${incomingModuleApi.map(name=>`'${name}'`).join(',')}]")
 `);
 const cmake=arg('cmake')??'cmake';
 await run(cmake,['-S',stage,'-B',binary,'-G','Ninja',
@@ -57,6 +67,7 @@ await run(cmake,['-S',stage,'-B',binary,'-G','Ninja',
   '-DSDL_TESTS=OFF','-DSDL_TEST_LIBRARY=OFF','-DSDLIMAGE_SAMPLES=OFF','-DSDLIMAGE_TESTS=OFF',
   '-DSDLTTF_SAMPLES=OFF','-DSDLTTF_TESTS=OFF','-DSDLTTF_PLUTOSVG=OFF']);
 await run(cmake,['--build',binary,'--target','th06','--parallel',arg('jobs')??'6']);
+await run(process.execPath,[path.join(root,'scripts/check-th06-runtime.mjs'),binary]);
 await cp(path.join(root,'integrations/browser-extension'),extension,{recursive:true});
 await mkdir(path.join(extension,'runtime'),{recursive:true});
 for(const file of ['th06.js','th06.wasm'])await copyFile(path.join(binary,file),path.join(extension,'runtime',file));
