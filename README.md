@@ -4,6 +4,8 @@
 
 对应 [eagler-touhou #144](https://github.com/Ritosa2333/eagler-touhou/issues/144)。提供基础避弹、独立座位输入接口、浏览器演示，以及[红魔乡本地合作接入](integrations/th06/README.md)：P1 真人 + P2 AI，使用作品已有的多人战斗与资源规则。
 
+[妖妖梦本地合作接入](integrations/th07/README.md)复用同一套实力、配合与调参选项，入口为 `/th07.html`。幽明结界期间继续避弹，不把结界倒计时当作无敌时间。
+
 [主站本地扩展](integrations/browser-extension/README.md)可在自己的浏览器中为红魔乡多人运行页加载 AI，接管当前客户端的联机座位。其他玩家照常使用主站，扩展不增加房间人数，不修改站点部署。
 
 ## 默认策略
